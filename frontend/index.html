@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FUTUREOS: Systemic Risk Engine</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #0b0f19; --bg-surface: #131a2c; --bg-card: #1c253b;
+            --text-primary: #f3f4f6; --text-secondary: #9ca3af;
+            --accent-glow: #3b82f6; --accent-success: #10b981; --accent-danger: #ef4444;
+            --border-color: #263554;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-primary); padding-bottom: 40px; }
+
+        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 32px; background-color: var(--bg-surface); border-bottom: 1px solid var(--border-color); }
+        .logo-group h1 { font-size: 1.25rem; font-weight: 800; color: #fff; }
+        .logo-group p { font-size: 0.75rem; color: var(--text-secondary); }
+
+        .workspace-container {
+            display: grid; grid-template-columns: 300px 1fr 380px; gap: 24px; padding: 32px; max-width: 1800px; margin: 0 auto;
+        }
+
+        .panel { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; height: fit-content; }
+        .panel-title { font-size: 1rem; font-weight: 700; margin-bottom: 20px; color: var(--text-primary); border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+
+        .slider-wrapper { margin-bottom: 24px; }
+        .slider-wrapper label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .slider-wrapper label span.weight-val { color: var(--accent-glow); font-weight: 600; }
+        .slider-input { width: 100%; -webkit-appearance: none; background: var(--bg-card); height: 6px; border-radius: 3px; outline: none; }
+        .slider-input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-glow); cursor: pointer; }
+
+        .shock-selector { width: 100%; padding: 10px; background: var(--bg-card); color: white; border: 1px solid var(--border-color); border-radius: 6px; outline: none; margin-top: 10px; }
+
+        .momentum-stage { display: flex; flex-direction: column; gap: 16px; }
+        .entity-card { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: grid; grid-template-columns: 50px 1fr 140px; align-items: center; gap: 20px; transition: all 0.3s; }
+        .rank-badge { font-size: 1.5rem; font-weight: 900; color: var(--text-secondary); text-align: center; }
+        .details-block h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; color: #fff; }
+        .badge-row { display: flex; gap: 8px; margin-top: 10px; }
+        .metric-badge { background-color: rgba(38, 53, 84, 0.4); border: 1px solid var(--border-color); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; color: var(--text-primary); }
+        .score-block { text-align: right; }
+        .score-value { font-size: 1.75rem; font-weight: 800; color: var(--accent-success); margin-top: 2px; }
+        
+        .penalty-tag { color: var(--accent-danger); font-size: 0.8rem; font-weight: 600; margin-top: 4px; display: block; }
+
+        #graph-container { width: 100%; height: 500px; background-color: var(--bg-main); border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); }
+        .tooltip { position: absolute; text-align: center; padding: 8px; font-size: 12px; background: var(--bg-card); color: #fff; border: 1px solid var(--border-color); border-radius: 4px; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-group">
+            <h1>FUTUREOS</h1>
+            <p>Strategy Command Center • Systemic Risk Engine</p>
+        </div>
+    </header>
+
+    <div class="workspace-container">
+        <aside class="panel">
+            <div class="panel-title">SaaS Evaluation Weights</div>
+            <div class="slider-wrapper">
+                <label>Revenue Scale (MRR) <span class="weight-val" id="val-mrr">33%</span></label>
+                <input type="range" min="0" max="100" value="33" class="slider-input" id="slide-mrr" oninput="triggerSimulation()">
+            </div>
+            <div class="slider-wrapper">
+                <label>Growth Velocity (YoY) <span class="weight-val" id="val-growth">33%</span></label>
+                <input type="range" min="0" max="100" value="33" class="slider-input" id="slide-growth" oninput="triggerSimulation()">
+            </div>
+            <div class="slider-wrapper">
+                <label>Capital Efficiency (LTV:CAC) <span class="weight-val" id="val-efficiency">33%</span></label>
+                <input type="range" min="0" max="100" value="33" class="slider-input" id="slide-efficiency" oninput="triggerSimulation()">
+            </div>
+
+            <div class="panel-title" style="margin-top: 40px;">Macro Shocks</div>
+            <p style="font-size: 0.8rem; color: var(--text-secondary);">Simulate an infrastructure failure to map systemic vulnerability.</p>
+            <select class="shock-selector" id="shock-selector" onchange="triggerSimulation()">
+                <option value="">-- No Shock (Baseline) --</option>
+                <option value="AWS us-east-1">AWS us-east-1 Outage</option>
+                <option value="Stripe API">Stripe API Disruption</option>
+                <option value="OpenAI GPT-4">OpenAI GPT-4 Deprecation</option>
+                <option value="Global EOR Regulations">Global EOR Ban</option>
+            </select>
+        </aside>
+
+        <main class="momentum-stage">
+            <div id="leaderboard-container" style="display: flex; flex-direction: column; gap: 16px;"></div>
+        </main>
+
+        <aside class="panel">
+            <div class="panel-title">Interdependency Atlas</div>
+            <div id="graph-container"></div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 12px; text-align: center;">
+                🟢 Startups | 🔵 Infrastructure <br> Red highlights indicate cascaded shock impacts.
+            </p>
+        </aside>
+    </div>
+
+    <div id="tooltip" class="tooltip"></div>
+
+    <script>
+        let d3Simulation; 
+
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchBaselineData();
+        });
+
+        async function fetchBaselineData() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/baseline');
+                const data = await response.json();
+                
+                renderLeaderboard(data.rankings);
+                renderGraph(data.graph);
+            } catch (error) {
+                console.error("Connection error:", error);
+                document.getElementById('leaderboard-container').innerHTML = `<p style="color:red">System Connect Failure. Verify FastAPI is running.</p>`;
+            }
+        }
+
+        async function triggerSimulation() {
+            const wMrr = parseInt(document.getElementById('slide-mrr').value);
+            const wGrowth = parseInt(document.getElementById('slide-growth').value);
+            const wEfficiency = parseInt(document.getElementById('slide-efficiency').value);
+            const shockValue = document.getElementById('shock-selector').value;
+
+            document.getElementById('val-mrr').innerText = `${wMrr}%`;
+            document.getElementById('val-growth').innerText = `${wGrowth}%`;
+            document.getElementById('val-efficiency').innerText = `${wEfficiency}%`;
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        weight_mrr: wMrr,
+                        weight_growth: wGrowth,
+                        weight_efficiency: wEfficiency,
+                        shocked_node_name: shockValue === "" ? null : shockValue
+                    })
+                });
+                
+                const data = await response.json();
+                renderLeaderboard(data.rankings);
+                renderGraph(data.graph); 
+            } catch (error) {
+                console.error("Simulation error:", error);
+            }
+        }
+
+        function renderLeaderboard(rankings) {
+            const container = document.getElementById('leaderboard-container');
+            container.innerHTML = '';
+
+            rankings.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'entity-card';
+                
+                if (item.penalty_taken > 0) {
+                    card.style.borderColor = "var(--accent-danger)";
+                }
+
+                const formatMRR = `$${(item.raw_metrics.mrr / 1000000).toFixed(1)}M`;
+                const penaltyHTML = item.penalty_taken > 0 ? `<span class="penalty-tag">⚠️ Systemic Risk Penalty: -${item.penalty_taken} pts</span>` : "";
+
+                card.innerHTML = `
+                    <div class="rank-badge">#${item.rank}</div>
+                    <div class="details-block">
+                        <h3>${item.name}</h3>
+                        <div class="badge-row">
+                            <span class="metric-badge">💰 ${formatMRR}</span>
+                            <span class="metric-badge">📈 ${item.raw_metrics.yoy_growth}%</span>
+                            <span class="metric-badge">⚖️ ${item.raw_metrics.ltv_cac_ratio}x</span>
+                        </div>
+                        ${penaltyHTML}
+                    </div>
+                    <div class="score-block">
+                        <div class="score-label">Score</div>
+                        <div class="score-value" style="color: ${item.penalty_taken > 0 ? 'var(--accent-danger)' : 'var(--accent-success)'}">${item.emergence_score}</div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderGraph(graphData) {
+            const container = document.getElementById('graph-container');
+            container.innerHTML = ''; 
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select("#graph-container")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const tooltip = d3.select("#tooltip");
+
+            d3Simulation = d3.forceSimulation(graphData.nodes)
+                .force("link", d3.forceLink(graphData.links).id(d => d.id).distance(100))
+                .force("charge", d3.forceManyBody().strength(-300))
+                .force("center", d3.forceCenter(width / 2, height / 2));
+
+            const link = svg.append("g")
+                .attr("stroke", "var(--border-color)")
+                .attr("stroke-opacity", 0.6)
+                .selectAll("line")
+                .data(graphData.links)
+                .join("line")
+                .attr("stroke-width", d => d.value * 3);
+
+            const node = svg.append("g")
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1.5)
+                .selectAll("circle")
+                .data(graphData.nodes)
+                .join("circle")
+                .attr("r", d => d.group === "tech" ? 12 : 8)
+                .attr("fill", d => {
+                    if (d.is_shocked) return "var(--accent-danger)"; 
+                    return d.group === "startup" ? "var(--accent-success)" : "var(--accent-glow)";
+                })
+                .call(drag(d3Simulation));
+
+            node.on("mouseover", (event, d) => {
+                tooltip.transition().duration(200).style("opacity", .9);
+                tooltip.html(d.name)
+                    .style("left", (event.pageX + 10) + "px")
+                    .style("top", (event.pageY - 28) + "px");
+            }).on("mouseout", () => {
+                tooltip.transition().duration(500).style("opacity", 0);
+            });
+
+            d3Simulation.on("tick", () => {
+                link
+                    .attr("x1", d => d.source.x)
+                    .attr("y1", d => d.source.y)
+                    .attr("x2", d => d.target.x)
+                    .attr("y2", d => d.target.y);
+                node
+                    .attr("cx", d => d.x = Math.max(12, Math.min(width - 12, d.x)))
+                    .attr("cy", d => d.y = Math.max(12, Math.min(height - 12, d.y)));
+            });
+
+            function drag(simulation) {
+                function dragstarted(event) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                }
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }
+                return d3.drag().on("start", dragstarted).on("drag", dragged).on("end", dragended);
+            }
+        }
+    </script>
+</body>
+</html>
